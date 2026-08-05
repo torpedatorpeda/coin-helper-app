@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coin Helper Mini App</title>
+    <!-- Подключаем Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color, #19232d);
+            color: var(--tg-theme-text-color, #ffffff);
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        h2 {
+            text-align: center;
+            margin-top: 0;
+            color: var(--tg-theme-hint-color, #8899a6);
+            font-size: 18px;
+        }
+        .type-switcher {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .type-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            background-color: #243447;
+            color: #fff;
+            opacity: 0.6;
+            transition: 0.2s;
+        }
+        .type-btn.active.expense {
+            background-color: #ff5252;
+            opacity: 1;
+        }
+        .type-btn.active.income {
+            background-color: #4caf50;
+            opacity: 1;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #8899a6;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #2c3e50;
+            background-color: #1e2d3b;
+            color: #ffffff;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        input:focus, select:focus {
+            border-color: #3b82f6;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--tg-theme-button-color, #3b82f6);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Coin Helper — Новая запись</h2>
+
+    <div class="type-switcher">
+        <button type="button" class="type-btn active expense" id="btn-expense" onclick="setType('expense')">➖ Расход</button>
+        <button type="button" class="type-btn income" id="btn-income" onclick="setType('income')">➕ Доход</button>
+    </div>
+
+    <div class="form-group">
+        <label for="amount">Сумма (₽)</label>
+        <input type="number" id="amount" placeholder="0.00" step="any" inputmode="decimal">
+    </div>
+
+    <div class="form-group">
+        <label for="category">Категория</label>
+        <select id="category">
+            <!-- Категории подгрузятся динамически -->
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="comment">Комментарий (необязательно)</label>
+        <input type="text" id="comment" placeholder="Например: продукты на неделю">
+    </div>
+
+    <button class="submit-btn" onclick="sendData()">Сохранить операцию</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем на весь экран
+
+        let currentType = 'expense';
+
+        const expCategories = ["Продукты", "Транспорт", "Развлечения", "ЖКХ и Дом", "Здоровье", "Другое"];
+        const incCategories = ["Зарплата", "Фриланс", "Кэшбэк", "Другое"];
+
+        function updateCategories() {
+            const select = document.getElementById('category');
+            select.innerHTML = '';
+            const cats = currentType === 'expense' ? expCategories : incCategories;
+            cats.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                select.appendChild(opt);
+            });
+        }
+
+        function setType(type) {
+            currentType = type;
+            document.getElementById('btn-expense').className = 'type-btn expense' + (type === 'expense' ? ' active' : '');
+            document.getElementById('btn-income').className = 'type-btn income' + (type === 'income' ? ' active' : '');
+            updateCategories();
+        }
+
+        function sendData() {
+            const amount = parseFloat(document.getElementById('amount').value);
+            const category = document.getElementById('category').value;
+            const comment = document.getElementById('comment').value.trim();
+
+            if (!amount || amount <= 0) {
+                tg.showAlert('Пожалуйста, введите корректную сумму.');
+                return;
+            }
+
+            const payload = {
+                type: currentType,
+                amount: amount,
+                category: category,
+                comment: comment
+            };
+
+            // Отправляем данные боту и закрываем Web App
+            tg.sendData(JSON.stringify(payload));
+            tg.close();
+        }
+
+        // Инициализация
+        updateCategories();
+    </script>
+</body>
+</html>
