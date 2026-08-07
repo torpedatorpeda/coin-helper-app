@@ -38,7 +38,6 @@
             display: block;
         }
 
-        /* Убираем стрелочки спиннеров */
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -97,7 +96,6 @@
             transform: scale(0.98);
         }
 
-        /* ТОАСТ АНИМАЦИЯ */
         .toast {
             position: fixed;
             top: -60px;
@@ -248,8 +246,10 @@
         tg.expand();
 
         let currentType = 'expense';
-        const expCategories = ["Продукты", "Транспорт", "Развлечения", "ЖКХ и Дом", "Здоровье", "Другое"];
-        const incCategories = ["Зарплата", "Фриланс", "Кэшбэк", "Другое"];
+
+        function getUserId() {
+            return tg.initDataUnsafe?.user?.id || 0;
+        }
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
@@ -279,34 +279,39 @@
             currentType = type;
             document.getElementById('btn-expense').className = 'type-btn expense' + (type === 'expense' ? ' active' : '');
             document.getElementById('btn-income').className = 'type-btn income' + (type === 'income' ? ' active' : '');
-            updateCategories();
+            loadCategories();
         }
 
-        function updateCategories() {
+        async function loadCategories() {
             const select = document.getElementById('category');
             select.innerHTML = '';
-            const cats = currentType === 'expense' ? expCategories : incCategories;
-            cats.forEach(cat => {
-                const opt = document.createElement('option');
-                opt.value = cat;
-                opt.textContent = cat;
-                select.appendChild(opt);
-            });
-        }
-
-        function getLocalHistory() {
+            
+            const userId = getUserId();
             try {
-                return JSON.parse(localStorage.getItem('coin_history') || '[]');
+                const res = await fetch(`/api/categories?user_id=${userId}`);
+                const data = await res.json();
+                
+                const cats = currentType === 'expense' ? data.expense : ["Зарплата", "Фриланс", "Кэшбэк", "Другое"];
+                cats.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    select.appendChild(opt);
+                });
             } catch (e) {
-                return [];
+                const fallback = currentType === 'expense' 
+                    ? ["Продукты", "Транспорт", "Развлечения", "ЖКХ и Дом", "Здоровье", "Другое"]
+                    : ["Зарплата", "Фриланс", "Кэшбэк", "Другое"];
+                fallback.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    select.appendChild(opt);
+                });
             }
         }
 
-        function saveLocalHistory(history) {
-            localStorage.setItem('coin_history', JSON.stringify(history));
-        }
-
-        function sendData() {
+        async function sendData() {
             const amountInput = document.getElementById('amount');
             const commentInput = document.getElementById('comment');
             const amount = parseFloat(amountInput.value);
@@ -318,66 +323,76 @@
                 return;
             }
 
-            // Записываем локально
-            const item = {
-                id: Date.now(),
-                type: currentType,
-                amount: amount,
-                category: category,
-                comment: comment,
-                date: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-            };
+            const userId = getUserId();
 
-            const history = getLocalHistory();
-            history.push(item);
-            saveLocalHistory(history);
+            try {
+                const response = await fetch('/api/transaction/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, type: currentType, amount, category, comment })
+                });
 
-            // Очищаем ввод
-            amountInput.value = '';
-            commentInput.value = '';
-            
-            // ВСПЛЫВАЮЩАЯ АНИМАЦИЯ (БЕЗ ЗАКРЫТИЯ ОКНА)
-            showToast(currentType === 'expense' ? 'Расход сохранен!' : 'Доход сохранен!');
-        }
-
-        function loadHistory() {
-            const list = document.getElementById('history-list');
-            const history = getLocalHistory();
-
-            if (!history.length) {
-                list.innerHTML = '<div style="text-align:center; color: var(--hint-color); padding: 20px;">История пока пуста</div>';
-                return;
+                if (response.ok) {
+                    amountInput.value = '';
+                    commentInput.value = '';
+                    showToast(currentType === 'expense' ? 'Расход сохранен!' : 'Доход сохранен!');
+                } else {
+                    tg.showAlert('Ошибка сохранения на сервер.');
+                }
+            } catch (e) {
+                tg.showAlert('Не удалось связаться с сервером бота.');
             }
-
-            list.innerHTML = '';
-            history.slice().reverse().forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                const sign = item.type === 'expense' ? '-' : '+';
-                const cls = item.type === 'expense' ? 'expense' : 'income';
-
-                div.innerHTML = `
-                    <div class="history-info">
-                        <div class="history-cat">${item.category}</div>
-                        <div class="history-comm">${item.comment || item.date}</div>
-                    </div>
-                    <div class="history-right">
-                        <div class="history-amount ${cls}">${sign}${item.amount} ₽</div>
-                        <button class="del-btn" onclick="deleteItem(${item.id})">🗑</button>
-                    </div>
-                `;
-                list.appendChild(div);
-            });
         }
 
-        function deleteItem(id) {
-            let history = getLocalHistory();
-            history = history.filter(item => item.id !== id);
-            saveLocalHistory(history);
-            loadHistory();
+        async function loadHistory() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '<div style="text-align:center; color: var(--hint-color); padding: 20px;">Загрузка истории...</div>';
+            
+            const userId = getUserId();
+
+            try {
+                const res = await fetch(`/api/history?user_id=${userId}`);
+                const history = await res.json();
+
+                if (!history || !history.length) {
+                    list.innerHTML = '<div style="text-align:center; color: var(--hint-color); padding: 20px;">История пока пуста</div>';
+                    return;
+                }
+
+                list.innerHTML = '';
+                history.slice().reverse().forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'history-item';
+                    const sign = item.type === 'expense' ? '-' : '+';
+                    const cls = item.type === 'expense' ? 'expense' : 'income';
+
+                    div.innerHTML = `
+                        <div class="history-info">
+                            <div class="history-cat">${item.category}</div>
+                            <div class="history-comm">${item.comment ? item.comment + ' • ' : ''}${item.date}</div>
+                        </div>
+                        <div class="history-right">
+                            <div class="history-amount ${cls}">${sign}${item.amount} ₽</div>
+                            <button class="del-btn" onclick="deleteItem(${item.id})">🗑</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch (e) {
+                list.innerHTML = '<div style="text-align:center; color: var(--danger-color); padding: 20px;">Ошибка загрузки истории</div>';
+            }
         }
 
-        updateCategories();
+        async function deleteItem(id) {
+            try {
+                await fetch(`/api/transaction/delete?id=${id}`, { method: 'DELETE' });
+                loadHistory();
+            } catch (e) {
+                tg.showAlert('Не удалось удалить запись.');
+            }
+        }
+
+        loadCategories();
     </script>
 </body>
 </html>
