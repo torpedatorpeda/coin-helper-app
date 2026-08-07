@@ -38,7 +38,7 @@
             display: block;
         }
 
-        /* Убираем стрелочки (спиннеры) в поле ввода типа number */
+        /* Убираем стрелочки в input number */
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -91,6 +91,33 @@
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* АНИМАЦИЯ ТОАСТА (ВСПЛЫВАЮЩЕЕ СООБЩЕНИЕ) */
+        .toast {
+            position: fixed;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--success-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toast.show {
+            top: 20px;
         }
 
         .card {
@@ -154,6 +181,12 @@
     </style>
 </head>
 <body>
+
+    <!-- ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ -->
+    <div id="toast" class="toast">
+        <span>✅</span>
+        <span id="toast-message">Операция сохранена!</span>
+    </div>
 
     <div class="container">
         <!-- ВКЛАДКА 1: ВВОД -->
@@ -219,6 +252,21 @@
         const expCategories = ["Продукты", "Транспорт", "Развлечения", "ЖКХ и Дом", "Здоровье", "Другое"];
         const incCategories = ["Зарплата", "Фриланс", "Кэшбэк", "Другое"];
 
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = msg;
+            toast.classList.add('show');
+            
+            // Легкая вибрация телефона при успехе
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred('success');
+            }
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
         function switchTab(tabName, el) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -260,16 +308,34 @@
             localStorage.setItem('coin_history', JSON.stringify(history));
         }
 
-        function sendData() {
-            const amount = parseFloat(document.getElementById('amount').value);
+        async function sendData() {
+            const amountInput = document.getElementById('amount');
+            const commentInput = document.getElementById('comment');
+            const amount = parseFloat(amountInput.value);
             const category = document.getElementById('category').value;
-            const comment = document.getElementById('comment').value.trim();
+            const comment = commentInput.value.trim();
 
             if (!amount || amount <= 0) {
                 tg.showAlert('Пожалуйста, введите корректную сумму.');
                 return;
             }
 
+            const userId = tg.initDataUnsafe?.user?.id;
+
+            // Отправляем данные на бэкенд без закрытия WebApp
+            if (userId) {
+                try {
+                    await fetch('/api/transaction/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: userId, type: currentType, amount, category, comment })
+                    });
+                } catch (e) {
+                    console.error('Ошибка сохранения на сервер', e);
+                }
+            }
+
+            // Локальное сохранение для автономного отображения истории
             const item = {
                 id: Date.now(),
                 type: currentType,
@@ -283,8 +349,11 @@
             history.push(item);
             saveLocalHistory(history);
 
-            tg.sendData(JSON.stringify({ type: currentType, amount, category, comment }));
-            tg.close();
+            // Очищаем форму и показываем анимацию успеха
+            amountInput.value = '';
+            commentInput.value = '';
+            
+            showToast(currentType === 'expense' ? 'Расход добавлен!' : 'Доход добавлен!');
         }
 
         function loadHistory() {
