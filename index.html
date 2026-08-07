@@ -38,7 +38,7 @@
             display: block;
         }
 
-        /* Убираем стрелочки в input number */
+        /* Убираем стрелочки спиннеров */
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -97,7 +97,7 @@
             transform: scale(0.98);
         }
 
-        /* АНИМАЦИЯ ТОАСТА (ВСПЛЫВАЮЩЕЕ СООБЩЕНИЕ) */
+        /* ТОАСТ АНИМАЦИЯ */
         .toast {
             position: fixed;
             top: -60px;
@@ -182,7 +182,6 @@
 </head>
 <body>
 
-    <!-- ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ -->
     <div id="toast" class="toast">
         <span>✅</span>
         <span id="toast-message">Операция сохранена!</span>
@@ -257,7 +256,6 @@
             document.getElementById('toast-message').innerText = msg;
             toast.classList.add('show');
             
-            // Легкая вибрация телефона при успехе
             if (tg.HapticFeedback) {
                 tg.HapticFeedback.notificationOccurred('success');
             }
@@ -308,7 +306,7 @@
             localStorage.setItem('coin_history', JSON.stringify(history));
         }
 
-        async function sendData() {
+        function sendData() {
             const amountInput = document.getElementById('amount');
             const commentInput = document.getElementById('comment');
             const amount = parseFloat(amountInput.value);
@@ -320,22 +318,7 @@
                 return;
             }
 
-            const userId = tg.initDataUnsafe?.user?.id;
-
-            // Отправляем данные на бэкенд без закрытия WebApp
-            if (userId) {
-                try {
-                    await fetch('/api/transaction/add', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: userId, type: currentType, amount, category, comment })
-                    });
-                } catch (e) {
-                    console.error('Ошибка сохранения на сервер', e);
-                }
-            }
-
-            // Локальное сохранение для автономного отображения истории
+            // Записываем локально
             const item = {
                 id: Date.now(),
                 type: currentType,
@@ -349,11 +332,12 @@
             history.push(item);
             saveLocalHistory(history);
 
-            // Очищаем форму и показываем анимацию успеха
+            // Очищаем ввод
             amountInput.value = '';
             commentInput.value = '';
             
-            showToast(currentType === 'expense' ? 'Расход добавлен!' : 'Доход добавлен!');
+            // ВСПЛЫВАЮЩАЯ АНИМАЦИЯ (БЕЗ ЗАКРЫТИЯ ОКНА)
+            showToast(currentType === 'expense' ? 'Расход сохранен!' : 'Доход сохранен!');
         }
 
         function loadHistory() {
